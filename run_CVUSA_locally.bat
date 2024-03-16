@@ -1,2 +1,2 @@
-python -u train.py --lr 0.0001 --batch-size 32 --world-size 1 --rank 0  --epochs 100 --save_path ./result --op sam --wd 0.03 --mining --dataset cvusa --cos --dim 1000 --asam --rho 2.5
-python -u train.py --lr 0.00001 --batch-size 32 --world-size 1 --rank 0  --epochs 50 --resume ./result/checkpoint.pth.tar --save_path ./result --op sam --wd 0.03 --mining --dataset cvusa --cos --dim 1000 --asam --rho 2.5 --sat_res 320 --crop
+python -u train.py --lr 0.0001 --batch-size 32 --world-size 1 --rank 0  --epochs 4 --save_path .\\result --op sam --wd 0.03 --mining --dataset cvusa --cos --dim 1000 --asam --rho 2.5
+python -u train.py --lr 0.00001 --batch-size 32 --world-size 1 --rank 0  --epochs 2 --resume .\\result\\checkpoint.pth.tar --save_path .\\result --op sam --wd 0.03 --mining --dataset cvusa --cos --dim 1000 --asam --rho 2.5 --sat_res 320 --crop
