@@ -336,14 +336,23 @@ def main_worker(gpu, ngpus_per_node, args):
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
-    train_scan_loader = torch.utils.data.DataLoader(
-        train_scan_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=torch.utils.data.distributed.DistributedSampler(train_scan_dataset), drop_last=False)
-
-    val_scan_loader = torch.utils.data.DataLoader(
-        val_scan_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True,
-        sampler=torch.utils.data.distributed.DistributedSampler(val_scan_dataset), drop_last=False)
+    if(args.distributed):
+        train_scan_loader = torch.utils.data.DataLoader(
+            train_scan_dataset, batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True, sampler=torch.utils.data.distributed.DistributedSampler(train_scan_dataset), drop_last=False)
+        val_scan_loader = torch.utils.data.DataLoader(
+            val_scan_dataset, batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True,
+            sampler=torch.utils.data.distributed.DistributedSampler(val_scan_dataset), drop_last=False)
+    else:
+        train_scan_loader = torch.utils.data.DataLoader(
+            train_scan_dataset, batch_size=args.batch_size, shuffle=True,
+            num_workers=args.workers, pin_memory=True, sampler=None, drop_last=False)
+        val_scan_loader = torch.utils.data.DataLoader(
+            val_scan_dataset, batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True, sampler=None, drop_last=False)
+        
+    
 
     val_query_loader = torch.utils.data.DataLoader(
         val_query_dataset,batch_size=32, shuffle=False,
@@ -426,8 +435,9 @@ def train(train_loader, model, criterion, optimizer, epoch, args, train_sampler=
 
         loss, mean_p, mean_n = criterion(embed_q, embed_k)
 
-        if args.mining:
-            train_sampler.update(concat_all_gather(embed_k).detach().cpu().numpy(),concat_all_gather(embed_q).detach().cpu().numpy(),concat_all_gather(indexes).detach().cpu().numpy())
+        if args.distributed:
+            if args.mining:
+                train_sampler.update(concat_all_gather(embed_k).detach().cpu().numpy(),concat_all_gather(embed_q).detach().cpu().numpy(),concat_all_gather(indexes).detach().cpu().numpy())
         losses.update(loss.item(), images_q.size(0))
         mean_ps.update(mean_p, images_q.size(0))
         mean_ns.update(mean_n, images_q.size(0))
