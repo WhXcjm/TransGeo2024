@@ -142,7 +142,7 @@ class CVUSA(torch.utils.data.Dataset):
             img_reference = Image.open(self.root + self.id_test_list[index][0]).convert('RGB')
             img_reference = self.transform_reference(img_reference)
             if self.args.crop:
-                atten_sat = Image.open(os.path.join(self.args.resume.replace(self.args.resume.split('/')[-1],''),'attention','val',str(index)+'.png')).convert('RGB')
+                atten_sat = Image.open(os.path.join(os.path.dirname(self.args.resume),'attention','val',str(index)+'.png')).convert('RGB')
                 return img_reference, torch.tensor(index), self.to_tensor(atten_sat)
             return img_reference, torch.tensor(index), 0
 
