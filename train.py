@@ -336,7 +336,7 @@ def main_worker(gpu, ngpus_per_node, args):
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
-    if(args.distributed):
+    if args.distributed:
         train_scan_loader = torch.utils.data.DataLoader(
             train_scan_dataset, batch_size=args.batch_size, shuffle=False,
             num_workers=args.workers, pin_memory=True, sampler=torch.utils.data.distributed.DistributedSampler(train_scan_dataset), drop_last=False)
@@ -384,7 +384,9 @@ def main_worker(gpu, ngpus_per_node, args):
             # remember best acc@1 and save checkpoint
             is_best = acc1 > best_acc1
             best_acc1 = max(acc1, best_acc1)
-        torch.distributed.barrier()
+        
+        if args.distributed:
+            torch.distributed.barrier()
 
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                                                     and args.rank % ngpus_per_node == 0):

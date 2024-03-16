@@ -43,7 +43,14 @@ def input_transform(size):
 
 # pytorch version of CVUSA loader
 class CVUSA(torch.utils.data.Dataset):
-    def __init__(self, mode = '', root = '/path/of/CVUSA/', same_area=True, print_bool=False, polar = '',args=None): #CV-dataset
+
+    def __init__(self,
+                 mode='',
+                 root='/path/to/CVUSA/',
+                 same_area=True,
+                 print_bool=False,
+                 polar='',
+                 args=None):  #CV-dataset
         super(CVUSA, self).__init__()
 
         self.args = args
@@ -120,7 +127,7 @@ class CVUSA(torch.utils.data.Dataset):
             img_query = self.transform_query(img_query)
             img_reference = self.transform_reference(img_reference)
             if self.args.crop:
-                atten_sat = Image.open(os.path.join(self.args.resume.replace(self.args.resume.split('/')[-1],''),'attention','train',str(idx)+'.png')).convert('RGB')
+                atten_sat = Image.open(os.path.join(os.path.dirname(self.args.resume),'attention','train',str(idx)+'.png')).convert('RGB')
                 return img_query, img_reference, torch.tensor(idx), torch.tensor(idx), 0, self.to_tensor(atten_sat)
             return img_query, img_reference, torch.tensor(idx), torch.tensor(idx), 0, 0
 

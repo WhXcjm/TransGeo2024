@@ -14,21 +14,24 @@ import matplotlib.pyplot as plt
 
 
 class DistilledVisionTransformer(VisionTransformer):
+
     def __init__(self, crop=False, save=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.dist_token = nn.Parameter(torch.zeros(1, 1, self.embed_dim))
 
         num_patches = self.patch_embed.num_patches
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 2, self.embed_dim))
-        self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if self.num_classes > 0 else nn.Identity()
+        self.pos_embed = nn.Parameter(
+            torch.zeros(1, num_patches + 2, self.embed_dim))
+        self.head_dist = nn.Linear(
+            self.embed_dim,
+            self.num_classes) if self.num_classes > 0 else nn.Identity()
 
         trunc_normal_(self.dist_token, std=.02)
         trunc_normal_(self.pos_embed, std=.02)
         self.head_dist.apply(self._init_weights)
         self.save = save
         self.crop = crop
-        self.crop_rate = 0.64 # keep rate: 0.53 352, 0.64 320, 0.79 288
-
+        self.crop_rate = 0.64  # keep rate: 0.53 352, 0.64 320, 0.79 288
 
     def forward_features(self, x):
         # taken from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
@@ -36,7 +39,8 @@ class DistilledVisionTransformer(VisionTransformer):
         B = x.shape[0]
         x = self.patch_embed(x)
 
-        cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        cls_tokens = self.cls_token.expand(
+            B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         dist_token = self.dist_token.expand(B, -1, -1)
         x = torch.cat((cls_tokens, dist_token, x), dim=1)
 
@@ -57,7 +61,8 @@ class DistilledVisionTransformer(VisionTransformer):
         B = x.shape[0]
         x = self.patch_embed(x)
 
-        cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        cls_tokens = self.cls_token.expand(
+            B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         dist_token = self.dist_token.expand(B, -1, -1)
         x = torch.cat((cls_tokens, dist_token, x), dim=1)
 
@@ -65,24 +70,31 @@ class DistilledVisionTransformer(VisionTransformer):
         x = self.pos_drop(x)
 
         for i, blk in enumerate(self.blocks):
-            if i == len(self.blocks)-1:  # len(self.blocks)-1:
+            if i == len(self.blocks) - 1:  # len(self.blocks)-1:
                 y = blk.norm1(x)
                 B, N, C = y.shape
-                qkv = blk.attn.qkv(y).reshape(B, N, 3, blk.attn.num_heads, C // blk.attn.num_heads).permute(2, 0, 3, 1, 4)
-                q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
+                qkv = blk.attn.qkv(y).reshape(B, N, 3, blk.attn.num_heads,
+                                              C // blk.attn.num_heads).permute(
+                                                  2, 0, 3, 1, 4)
+                q, k, v = qkv[0], qkv[1], qkv[
+                    2]  # make torchscript happy (cannot use tensor as tuple)
 
                 att = (q @ k.transpose(-2, -1)) * blk.attn.scale
                 att = att.softmax(dim=-1)
 
-                last_map = (att[:, :, :2, 2:].detach().cpu().numpy()).sum(axis=1).sum(axis=1)
+                last_map = (att[:, :, :2, 2:].detach().cpu().numpy()).sum(
+                    axis=1).sum(axis=1)
                 last_map = last_map.reshape(
-                    [last_map.shape[0],x_shape[2] // 16, x_shape[3] // 16])
+                    [last_map.shape[0], x_shape[2] // 16, x_shape[3] // 16])
 
             x = blk(x)
 
         for j, index in enumerate(indexes.cpu().numpy()):
-            plt.imsave(os.path.join(self.save, str(indexes[j].cpu().numpy()) + '.png'),
-                np.tile(np.expand_dims(last_map[j]/ np.max(last_map[j]), 2), [1, 1, 3]))
+            plt.imsave(
+                os.path.join(self.save,
+                             str(indexes[j].cpu().numpy()) + '.png'),
+                np.tile(np.expand_dims(last_map[j] / np.max(last_map[j]), 2),
+                        [1, 1, 3]))
 
         x = self.norm(x)
 
@@ -93,22 +105,34 @@ class DistilledVisionTransformer(VisionTransformer):
         # add nonuniform-cropping
 
         B = x.shape[0]
-        grid_size = (x.shape[-2] // self.patch_embed.patch_size[0], x.shape[-1] // self.patch_embed.patch_size[1])
+        grid_size = (x.shape[-2] // self.patch_embed.patch_size[0],
+                     x.shape[-1] // self.patch_embed.patch_size[1])
         x = self.patch_embed(x)
         # sort based on attention
-        atten_reshape = torch.nn.functional.interpolate(atten.detach(), grid_size, mode='bilinear')
-        order = torch.argsort(atten_reshape[:,0,:,:].reshape([B,-1]),dim=1)
+        atten_reshape = torch.nn.functional.interpolate(atten.detach(),
+                                                        grid_size,
+                                                        mode='bilinear')
+        order = torch.argsort(atten_reshape[:, 0, :, :].reshape([B, -1]),
+                              dim=1)
         # select patches
         select_list = []
         pos_list = []
         for k in range(B):
-            select_list.append(x[k,order[[k],-int(self.crop_rate*order.shape[1]):]])
-            pos_list.append(torch.cat([self.pos_embed[:,:2],self.pos_embed[:,2+order[k,-int(self.crop_rate*order.shape[1]):]]],dim=1))
+            select_list.append(
+                x[k, order[[k], -int(self.crop_rate * order.shape[1]):]])
+            pos_list.append(
+                torch.cat([
+                    self.pos_embed[:, :2], self.
+                    pos_embed[:, 2 +
+                              order[k, -int(self.crop_rate * order.shape[1]):]]
+                ],
+                          dim=1))
 
-        x = torch.cat(select_list,dim=0)
-        pos_embed = torch.cat(pos_list,dim=0)
+        x = torch.cat(select_list, dim=0)
+        pos_embed = torch.cat(pos_list, dim=0)
 
-        cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        cls_tokens = self.cls_token.expand(
+            B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         dist_token = self.dist_token.expand(B, -1, -1)
         x = torch.cat((cls_tokens, dist_token, x), dim=1)
 
@@ -121,8 +145,12 @@ class DistilledVisionTransformer(VisionTransformer):
         x = self.norm(x)
         return x[:, 0], x[:, 1]
 
-
     def forward(self, x, atten=None, indexes=None):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        x = x.to(device)
+        if atten is not None:
+            atten = atten.to(device)
+
         if self.save is not None:
             x, x_dist = self.forward_features_save(x, indexes)
         elif self.crop:
@@ -169,4 +197,3 @@ def deit_small_distilled_patch16_224(pretrained=True, img_size=(224,224), num_cl
         else:
             model.load_state_dict(checkpoint["model"])
     return model
-
