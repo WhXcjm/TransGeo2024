@@ -46,7 +46,7 @@ class CVUSA(torch.utils.data.Dataset):
 
     def __init__(self,
                  mode='',
-                 root='C:/Users/xusir/Desktop/CVPR_subset/CVPR_subset/',
+                 root='/path/to/CVUSA/',
                  same_area=True,
                  print_bool=False,
                  polar='',
@@ -83,7 +83,7 @@ class CVUSA(torch.utils.data.Dataset):
 
         self.train_list = self.root + 'splits/train-19zl.csv'
         self.test_list = self.root + 'splits/val-19zl.csv'
-        self.tt_list=self.root + 'splits/val-19zl.csv'
+
         if print_bool:
             print('CVUSA: load %s' % self.train_list)
         self.__cur_id = 0  # for training
@@ -115,23 +115,9 @@ class CVUSA(torch.utils.data.Dataset):
                 self.id_test_idx_list.append(idx)
                 idx += 1
         self.test_data_size = len(self.id_test_list)
-        print("idx:",idx)
         if print_bool:
             print('CVUSA: load', self.test_list, ' data_size =', self.test_data_size)
-        self.id_tt_list = []
-        self.id_tt_idx_list = []
-        with open(self.tt_list, 'r') as file:
-            idx = 0
-            for line in file:
-                data = line.split(',')
-                pano_id = (data[0].split('/')[-1]).split('.')[0]
-                # satellite filename, streetview filename, pano_id
-                self.id_tt_list.append([data[0], data[1], pano_id])
-                self.id_tt_idx_list.append(idx)
-                idx += 1
-        self.tt_data_size = len(self.id_tt_list)
-        if print_bool:
-            print('CVUSA: load', self.tt_list, ' data_size =', self.tt_data_size)
+
     def __getitem__(self, index, debug=False):
         if self.mode == 'train':
             idx = index % len(self.id_idx_list)
@@ -156,27 +142,12 @@ class CVUSA(torch.utils.data.Dataset):
             img_reference = Image.open(self.root + self.id_test_list[index][0]).convert('RGB')
             img_reference = self.transform_reference(img_reference)
             if self.args.crop:
-                atten_sat = Image.open(os.path.join(self.args.resume.replace(self.args.resume.split('/')[-1],''),'attention','val',str(index)+'.png')).convert('RGB')
+                atten_sat = Image.open(os.path.join(os.path.dirname(self.args.resume),'attention','val',str(index)+'.png')).convert('RGB')
                 return img_reference, torch.tensor(index), self.to_tensor(atten_sat)
             return img_reference, torch.tensor(index), 0
 
-        elif 'tt_query' in self.mode:
-            img_query = Image.open(self.root + self.id_tt_list[index][1]).convert('RGB')
-            img_query = self.transform_query(img_query)
-            return img_query, torch.tensor(index), torch.tensor(index)
-
-        elif 'tt_reference' in self.mode:
-            img_reference = Image.open(self.root + self.id_tt_list[index][0]).convert('RGB')
-            img_reference = self.transform_reference(img_reference)
-            if self.args.crop:
-                atten_sat = Image.open(
-                    os.path.join(self.args.resume.replace(self.args.resume.split('/')[-1], ''), 'attention', 'val',
-                                 str(index) + '.png')).convert('RGB')
-                return img_reference, torch.tensor(index), self.to_tensor(atten_sat)
-            return img_reference, torch.tensor(index), 0
-
-        elif 'tt_query' in self.mode:
-            img_query = Image.open(self.root + self.id_tt_list[index][1]).convert('RGB')
+        elif 'test_query' in self.mode:
+            img_query = Image.open(self.root + self.id_test_list[index][1]).convert('RGB')
             img_query = self.transform_query(img_query)
             return img_query, torch.tensor(index), torch.tensor(index)
         else:
@@ -192,10 +163,6 @@ class CVUSA(torch.utils.data.Dataset):
             return len(self.id_test_list)
         elif 'test_query' in self.mode:
             return len(self.id_test_list)
-        elif 'tt_reference' in self.mode:
-            return len(self.id_tt_list)
-        elif 'tt_query' in self.mode:
-            return len(self.id_tt_list)
         else:
             print('not implemented!')
             raise Exception

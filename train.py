@@ -28,6 +28,8 @@ from dataset.global_sampler import DistributedMiningSampler,DistributedMiningSam
 from criterion.sam import SAM
 from ptflops import get_model_complexity_info
 
+#import test
+
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"  #
 
@@ -384,7 +386,7 @@ def main_worker(gpu, ngpus_per_node, args):
             # remember best acc@1 and save checkpoint
             is_best = acc1 > best_acc1
             best_acc1 = max(acc1, best_acc1)
-        
+
         if args.distributed:
             torch.distributed.barrier()
 
@@ -586,6 +588,9 @@ def validate(val_query_loader, val_reference_loader, model, args):
                 progress_q.display(i)
 
         [top1, top5] = accuracy(query_features, reference_features, query_labels.astype(int))
+        #accuracy(query_features, reference_features, query_labels.astype(int))
+        print("start finding the right piece")
+        find(query_features, reference_features)
 
     if args.evaluate:
         np.save(os.path.join(args.save_path, 'grd_global_descriptor.npy'), query_features)
@@ -651,6 +656,20 @@ def adjust_learning_rate(optimizer, epoch, args):
             lr *= 0.1 if epoch >= milestone else 1.
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+
+def find(query_features, reference_features):
+    ts = time.time()
+    N = query_features.shape[0]
+    M = reference_features.shape[0]
+    results=np.zeros([N])
+
+    query_features_norm = np.sqrt(np.sum(query_features ** 2, axis=1, keepdims=True))
+    reference_features_norm = np.sqrt(np.sum(reference_features ** 2, axis=1, keepdims=True))
+    similarity = np.matmul(query_features / query_features_norm,
+                           (reference_features / reference_features_norm).transpose())
+    for i in range(N):
+        results[i] = np.argmax(similarity[i, :])
+        print("第%d张图片对应索引：%d"%(i,results[i]))
 
 
 def accuracy(query_features, reference_features, query_labels, topk=[1,5,10]):
