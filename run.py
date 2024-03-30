@@ -6,10 +6,10 @@ import numpy as np
 import argparse
 from dataset.CVUSA_ import CVUSA
 from dataset.VIGOR import VIGOR
-
+import numpy as np
 import train
 from train import validate
-checkpoint = torch.load('C:/Users/xusir/Desktop/CVPR_subset/model_best.pth.tar')
+checkpoint = torch.load('C:/Users/xusir/Desktop/college/projects/Eyemap/CVPR_subset/model_best.pth.tar')
 from collections import OrderedDict
 new_state_dict = OrderedDict()
 state_dict=checkpoint['state_dict']

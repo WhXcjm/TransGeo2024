@@ -46,7 +46,7 @@ class CVUSA(torch.utils.data.Dataset):
 
     def __init__(self,
                  mode='',
-                 root='C:/Users/xusir/Desktop/CVPR_subset/CVPR_subset/',
+                 root='C:/Users/xusir/Desktop/college/projects/Eyemap/CVPR_subset/CVPR_subset',
                  same_area=True,
                  print_bool=False,
                  polar='',
