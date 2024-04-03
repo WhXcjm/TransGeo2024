@@ -53,6 +53,7 @@ class CVUSA(torch.utils.data.Dataset):
                  args=None):  #CV-dataset
         super(CVUSA, self).__init__()
 
+
         self.args = args
         self.root = root
         self.polar = polar
