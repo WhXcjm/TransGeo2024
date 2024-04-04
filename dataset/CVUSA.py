@@ -46,13 +46,12 @@ class CVUSA(torch.utils.data.Dataset):
 
     def __init__(self,
                  mode='',
-                 root='C:/Users/xusir/Desktop/college/projects/Eyemap/CVPR_subset/CVPR_subset',
+                 root='C:/Users/xusir/Desktop/college/projects/Eyemap/CVPR_subset/CVPR_subset/',
                  same_area=True,
                  print_bool=False,
                  polar='',
                  args=None):  #CV-dataset
         super(CVUSA, self).__init__()
-
 
         self.args = args
         self.root = root
@@ -84,9 +83,9 @@ class CVUSA(torch.utils.data.Dataset):
 
         self.train_list = self.root + 'splits/train-19zl.csv'
         self.test_list = self.root + 'splits/val-19zl.csv'
-        self.tt_list=self.root + 'splits/val-19zl.csv'
+        self.tt_list=self.root + 'splits/beihang.csv'
         if print_bool:
-            print('CVUSA: load %s' % self.train_list)
+            print('CVUSA: load %s' % self.tt_list)
         self.__cur_id = 0  # for training
         self.id_list = []
         self.id_idx_list = []
@@ -103,6 +102,7 @@ class CVUSA(torch.utils.data.Dataset):
         if print_bool:
             print('CVUSA: load', self.train_list, ' data_size =', self.data_size)
             print('CVUSA: load %s' % self.test_list)
+            print('CVUSA: load (tt)%s' % self.tt_list)
         self.__cur_test_id = 0  # for training
         self.id_test_list = []
         self.id_test_idx_list = []
@@ -161,7 +161,7 @@ class CVUSA(torch.utils.data.Dataset):
                 return img_reference, torch.tensor(index), self.to_tensor(atten_sat)
             return img_reference, torch.tensor(index), 0
 
-        elif 'tt_query' in self.mode:
+        elif 'test_query' in self.mode:
             img_query = Image.open(self.root + self.id_tt_list[index][1]).convert('RGB')
             img_query = self.transform_query(img_query)
             return img_query, torch.tensor(index), torch.tensor(index)
@@ -175,7 +175,7 @@ class CVUSA(torch.utils.data.Dataset):
                                  str(index) + '.png')).convert('RGB')
                 return img_reference, torch.tensor(index), self.to_tensor(atten_sat)
             return img_reference, torch.tensor(index), 0
-
+        
         elif 'tt_query' in self.mode:
             img_query = Image.open(self.root + self.id_tt_list[index][1]).convert('RGB')
             img_query = self.transform_query(img_query)

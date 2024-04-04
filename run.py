@@ -1,14 +1,17 @@
 import torch
 import train
+from PIL import Image
 from model.TransGeo import TransGeo
 import time
 import numpy as np
 import argparse
-from dataset.CVUSA_ import CVUSA
+from dataset.CVUSA import CVUSA
+from dataset.SATELLITE import SATELLITE
 from dataset.VIGOR import VIGOR
 import numpy as np
 import train
 from train import validate
+from train import validate_run
 checkpoint = torch.load('C:/Users/xusir/Desktop/college/projects/Eyemap/CVPR_subset/model_best.pth.tar')
 from collections import OrderedDict
 new_state_dict = OrderedDict()
@@ -107,11 +110,15 @@ parser.add_argument('--fov', default=0, type=int,
 
 
 
-
-
-
+find_index=[]
 
 def main():
+
+    '''now it's time to split the satellite image'''
+    satellite_whole_image = Image.open("C:/Users/xusir/Desktop/college/projects/Eyemap/satellite_resources/XueyuanRoad/L21/XueyuanRoad.jpg").convert('RGB')
+
+
+    '''below is the process of testing'''
     print("hhh")
     args = parser.parse_args()
     args.distributed=0
@@ -134,15 +141,86 @@ def main():
     model.load_state_dict(new_state_dict)
     model.eval()
     query_dataset = CVUSA(mode='tt_query', print_bool=True, same_area=(not args.cross), args=args)
-    reference_dataset = CVUSA(mode='tt_reference', print_bool=True, same_area=(not args.cross), args=args)
-    val_query_loader = torch.utils.data.DataLoader(
-        query_dataset,batch_size=32, shuffle=False,
+    whole_height=satellite_whole_image.height
+    whole_width=satellite_whole_image.width
+
+    Satellite_width=256
+    Satellite_height=256
+    number=-1
+    while(whole_height//2>Satellite_height or whole_width//2>Satellite_width):
+
+        if whole_width // 2 > Satellite_width and whole_height // 2 <= Satellite_height:    
+            reference_dataset = SATELLITE(img=satellite_whole_image, print_bool=True, args=args,mode="w")
+
+            mode=3
+        elif whole_width // 2 > Satellite_width and whole_height // 2 > Satellite_height:    
+            reference_dataset = SATELLITE(img=satellite_whole_image, print_bool=True, args=args,mode="w&h")
+     
+            mode=9
+        elif whole_width // 2 <= Satellite_width and whole_height // 2 > Satellite_height:    
+            reference_dataset = SATELLITE(img=satellite_whole_image, print_bool=True, args=args,mode="h")
+   
+            mode=3
+        
+        val_query_loader = torch.utils.data.DataLoader(
+        query_dataset,batch_size=1, shuffle=False,
         num_workers=args.workers, pin_memory=True)  # 512, 64
-    val_reference_loader = torch.utils.data.DataLoader(
-        reference_dataset,batch_size=64, shuffle=False,
+
+        val_reference_loader = torch.utils.data.DataLoader(
+        reference_dataset,batch_size=10, shuffle=False,
         num_workers=args.workers, pin_memory=True)  # 80, 128
 
-    validate(val_query_loader, val_reference_loader, model, args)
+        validate_run(val_query_loader,val_reference_loader, model, args,mode,find_index)
+        number+=1
+        if reference_dataset.mode=="w":
+            if find_index[number][1]==0:
+                crop_box=[0,0,whole_width,whole_height//2]
+            if find_index[number][1]==1:
+                crop_box=[0,whole_height//2,whole_width,whole_height]
+            if find_index[number][1]==2:
+                crop_box=[0,whole_height//4,whole_width,3*whole_height//4]
+            
+        elif reference_dataset.mode=="w&h":
+            if find_index[number][1]==0:
+                crop_box=[0,0,whole_width//2,whole_height//2]
+            if find_index[number][1]==1:
+                crop_box=[whole_width//2,0,whole_width,whole_height//2]
+            if find_index[number][1]==2:
+                crop_box=[whole_width//4,0,3*whole_width//4,whole_height//2]
+            if find_index[number][1]==3:
+                crop_box=[0,whole_height//2,whole_width//2,whole_height]
+            if find_index[number][1]==4:
+                crop_box=[whole_width//2,whole_height//2,whole_width,whole_height]
+            if find_index[number][1]==5:
+                crop_box=[whole_width//4,whole_height//2,3*whole_width//4,whole_height]
+            if find_index[number][1]==6:
+                crop_box=[0,whole_height//4,whole_width//2,3*whole_height//4]
+            if find_index[number][1]==7:
+                crop_box=[whole_width//2,whole_height//4,whole_width,3*whole_height//4]
+            if find_index[number][1]==8:
+                crop_box=[whole_width//4,whole_height//4,3*whole_width//4,3*whole_height//4]
+        elif reference_dataset.mode=="h":
+            if find_index[number][1]==0:
+                crop_box=[0,0,whole_width//2,whole_height]
+            if find_index[number][1]==1:
+                crop_box=[whole_width//2,0,whole_width,whole_height]
+            if find_index[number][1]==2:
+                crop_box=[whole_width//4,0,3*whole_width//4,whole_height]   
+            
+        satellite_whole_image=satellite_whole_image.crop(crop_box)
+        whole_height//=2
+        whole_width//=2
+    
+    #reference_dataset = SATELLITE(img=satellite_whole_image,mode="end", print_bool=True, args=args)
+    print("一路找过来的index：",find_index)
+    
+    #reference_dataset = CVUSA(mode='tt_reference', print_bool=True, same_area=(not args.cross), args=args)
+    
+    '''val_reference_loader = torch.utils.data.DataLoader(
+        reference_dataset,batch_size=64, shuffle=False,
+        num_workers=args.workers, pin_memory=True)  # 80, 128
+    '''
+ 
 
 if __name__ == '__main__':
     main()
