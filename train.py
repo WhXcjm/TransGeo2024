@@ -22,11 +22,14 @@ import numpy as np
 from dataset.VIGOR import VIGOR
 from dataset.CVUSA import CVUSA
 from dataset.CVACT import CVACT
+from dataset.SATELLITE import SATELLITE
 from model.TransGeo import TransGeo
 from criterion.soft_triplet import SoftTripletBiLoss
 from dataset.global_sampler import DistributedMiningSampler,DistributedMiningSamplerVigor
 from criterion.sam import SAM
 from ptflops import get_model_complexity_info
+
+#import test
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"  #
@@ -384,7 +387,7 @@ def main_worker(gpu, ngpus_per_node, args):
             # remember best acc@1 and save checkpoint
             is_best = acc1 > best_acc1
             best_acc1 = max(acc1, best_acc1)
-        
+
         if args.distributed:
             torch.distributed.barrier()
 
@@ -586,12 +589,102 @@ def validate(val_query_loader, val_reference_loader, model, args):
                 progress_q.display(i)
 
         [top1, top5] = accuracy(query_features, reference_features, query_labels.astype(int))
+        #accuracy(query_features, reference_features, query_labels.astype(int))
+        print("start finding the right piece")
+        find(query_features, reference_features)
+        
 
     if args.evaluate:
         np.save(os.path.join(args.save_path, 'grd_global_descriptor.npy'), query_features)
         np.save('sat_global_descriptor.npy', reference_features)
 
     return top1
+
+def validate_run(val_query_loader, val_reference_loader, model, args,mode,find_list):
+    batch_time = AverageMeter('Time', ':6.3f')
+    progress_q = ProgressMeter(
+        len(val_query_loader),
+        [batch_time],
+        prefix='Test_query: ')
+    progress_k = ProgressMeter(
+        len(val_reference_loader),
+        [batch_time],
+        prefix='Test_reference: ')
+
+    # switch to evaluate mode
+    model_query = model.module.query_net
+    model_reference = model.module.reference_net
+    if args.distributed:
+        # For multiprocessing distributed, DistributedDataParallel constructor
+        # should always set the single device scope, otherwise,
+        # DistributedDataParallel will use all available devices.
+        if args.gpu is not None:
+            torch.cuda.set_device(args.gpu)
+            model_query.cuda(args.gpu)
+            model_reference.cuda(args.gpu)
+
+    model_query.eval()
+    model_reference.eval()
+    print('model validate on cuda', args.gpu)
+
+    query_features = np.zeros([len(val_query_loader.dataset), args.dim])
+    query_labels = np.zeros([len(val_query_loader.dataset)])
+    reference_features = np.zeros([len(val_reference_loader.dataset), args.dim])
+
+    with torch.no_grad():
+        end = time.time()
+        # reference features
+        for i, (images, indexes, atten) in enumerate(val_reference_loader):
+            if args.gpu is not None:
+                images = images.cuda(args.gpu, non_blocking=True)
+                indexes = indexes.cuda(args.gpu, non_blocking=True)
+
+            # compute output
+            if args.crop:
+                reference_embed = model_reference(x=images, atten=atten)
+            else:
+                reference_embed = model_reference(x=images, indexes=indexes)  # delta
+
+            reference_features[indexes.cpu().numpy().astype(int), :] = reference_embed.detach().cpu().numpy()
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if i % args.print_freq == 0:
+                progress_k.display(i)
+
+        end = time.time()
+
+        # query features
+        for i, (images, indexes, labels) in enumerate(val_query_loader):
+            if args.gpu is not None:
+                images = images.cuda(args.gpu, non_blocking=True)
+                indexes = indexes.cuda(args.gpu, non_blocking=True)
+                labels = labels.cuda(args.gpu, non_blocking=True)
+
+            # compute output
+            query_embed = model_query(images)
+
+            query_features[indexes.cpu().numpy(), :] = query_embed.cpu().numpy()
+            query_labels[indexes.cpu().numpy()] = labels.cpu().numpy()
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if i % args.print_freq == 0:
+                progress_q.display(i)
+
+        [top1, top5] = accuracy(query_features, reference_features, query_labels.astype(int))
+        #accuracy(query_features, reference_features, query_labels.astype(int))
+        print("start finding the right piece")
+        find_list.append([mode,find_run(query_features, reference_features)])
+
+
+    if args.evaluate:
+        np.save(os.path.join(args.save_path, 'grd_global_descriptor.npy'), query_features)
+        np.save('sat_global_descriptor.npy', reference_features)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar', args=None):
@@ -652,6 +745,35 @@ def adjust_learning_rate(optimizer, epoch, args):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
+def find(query_features, reference_features):
+    ts = time.time()
+    N = query_features.shape[0]
+    M = reference_features.shape[0]
+    results=np.zeros([N])
+
+    query_features_norm = np.sqrt(np.sum(query_features ** 2, axis=1, keepdims=True))
+    reference_features_norm = np.sqrt(np.sum(reference_features ** 2, axis=1, keepdims=True))
+    similarity = np.matmul(query_features / query_features_norm,
+                           (reference_features / reference_features_norm).transpose())
+    for i in range(N):
+        results[i] = np.argmax(similarity[i, :])
+        print("第%d张图片对应索引：%d"%(i,results[i]))
+
+def find_run(query_features, reference_features):
+    ts = time.time()
+    N = query_features.shape[0]
+    M = reference_features.shape[0]
+    results=np.zeros([N])
+
+    query_features_norm = np.sqrt(np.sum(query_features ** 2, axis=1, keepdims=True))
+    reference_features_norm = np.sqrt(np.sum(reference_features ** 2, axis=1, keepdims=True))
+    similarity = np.matmul(query_features / query_features_norm,
+                           (reference_features / reference_features_norm).transpose())
+    for i in range(N):
+        result_acc = np.argmax(similarity[i, :])
+        #print("第%d张图片对应索引：%d"%(i,results[i]))
+    
+        return result_acc//10
 
 def accuracy(query_features, reference_features, query_labels, topk=[1,5,10]):
     """Computes the accuracy over the k top predictions for the specified values of k"""
